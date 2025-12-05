@@ -1,0 +1,48 @@
+name: Hent CVR data og opdater backend
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */12 * * *"
+
+jobs:
+  fetch_cvr:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check repo ud
+        uses: actions/checkout@v4
+
+      - name: Installér Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Installer dependencies
+        run: npm install node-fetch@2
+
+      - name: Lav CVR forespørgsel
+        env:
+          CVR_USER: ${{ secrets.CVR_USER }}
+          CVR_PASS: ${{ secrets.CVR_PASS }}
+        run: |
+          echo "→ Henter CVR data…"
+
+          AUTH_HEADER=$(printf "%s:%s" "$CVR_USER" "$CVR_PASS" | base64)
+
+          curl -X POST \
+            -H "Authorization: Basic $AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d '{"query":{"bool":{"must":[{"term":{"Vrvirksomhed.cvrNummer":"10150817"}}]}}}' \
+            https://distribution.virk.dk/cvr-permanent/virksomhed/_search \
+            > api/cvr.json
+
+          echo "→ CVR data gemt i api/cvr.json"
+
+      - name: Commit og push ændringer
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          git add api/cvr.json
+          git commit -m "Opdateret CVR data" || echo "No changes to commit"
+          git push
